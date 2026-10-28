@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>The Rainbow Crystal Quest (4-Stage & Multi-Camera Edition)</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js CDN (r128) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- FontAwesome Icons CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Font - Fredoka -->
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    * {
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Fredoka', sans-serif;
+      touch-action: none;
+      background-color: #87CEEB;
+    }
+    #gameCanvas {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+    /* Virtual Joystick Styling */
+    .joystick-container {
+      position: absolute;
+      bottom: 24px;
+      left: 24px;
+      width: 120px;
+      height: 120px;
+      background: rgba(255, 255, 255, 0.25);
+      border: 3px solid rgba(255, 255, 255, 0.6);
+      border-radius: 50%;
+      touch-action: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .joystick-knob {
+      width: 50px;
+      height: 50px;
+      background: radial-gradient(circle, #ff4081 0%, #d81b60 100%);
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      position: absolute;
+      pointer-events: none;
+      transition: transform 0.05s ease-out;
+    }
+    /* Quiz Card Styling & Hover Effects */
+    .quiz-card {
+      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .quiz-card:hover {
+      transform: translateY(-4px) scale(1.02);
+    }
+    .quiz-card:active {
+      transform: translateY(0) scale(0.98);
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-10px); }
+      40%, 80% { transform: translateX(10px); }
+    }
+    .animate-shake {
+      animation: shake 0.4s ease-in-out;
+    }
+    @keyframes rainbowGlow {
+      0% { filter: drop-shadow(0 0 8px #ff0000); }
+      25% { filter: drop-shadow(0 0 8px #ffff00); }
+      50% { filter: drop-shadow(0 0 8px #00ff00); }
+      75% { filter: drop-shadow(0 0 8px #00ffff); }
+      100% { filter: drop-shadow(0 0 8px #ff00ff); }
+    }
+    .rainbow-glow {
+      animation: rainbowGlow 3s infinite linear;
+    }
+  </style>
+</head>
+<body class="relative">
+
+  <!-- 3D WebGL Canvas -->
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- Top UI Header Banner -->
+  <header class="absolute top-3 left-3 right-3 flex flex-col sm:flex-row items-center justify-between pointer-events-none z-10 gap-2">
+    
+    <!-- Title Badge & Camera Switcher Button -->
+    <div class="flex items-center gap-2 pointer-events-auto">
+      <div class="bg-white/95 backdrop-blur-md px-3.5 py-2 rounded-2xl shadow-lg border-2 border-amber-300 flex items-center gap-2.5">
+        <div class="w-9 h-9 bg-gradient-to-tr from-purple-500 to-pink-500 rounded-xl flex items-center justify-center text-white text-lg font-bold shadow">
+          <i class="fa-solid fa-gem"></i>
+        </div>
+        <div>
+          <h1 class="text-xs sm:text-sm font-bold text-slate-800 leading-tight">The Rainbow Crystal Quest</h1>
+          <p class="text-[10px] sm:text-xs font-semibold text-purple-600">English Year 2 • Colours</p>
+        </div>
+      </div>
+
+      <!-- CAMERA SWITCHER BUTTON -->
+      <button id="cameraToggleBtn" class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 active:scale-95 text-white px-3 py-2 rounded-2xl font-bold shadow-lg border-2 border-white flex items-center gap-1.5 text-xs transition-transform cursor-pointer" title="Switch Camera View (Key 'C')">
+        <i class="fa-solid fa-camera text-yellow-300"></i>
+        <span class="hidden sm:inline">View:</span>
+        <span id="cameraModeText" class="text-yellow-300 font-extrabold uppercase">3rd Person</span>
+      </button>
+    </div>
+
+    <!-- HUD Center: Stage Progress & Inventory Slots -->
+    <div class="flex items-center gap-2.5 pointer-events-auto">
+      <!-- Stage Progress Badge -->
+      <div class="bg-slate-900/85 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-xl border-2 border-white/40 flex items-center gap-1.5 text-white text-xs font-bold">
+        <span class="text-amber-300">STAGE:</span>
+        <span id="stageProgressText" class="bg-purple-600 px-2 py-0.5 rounded-lg">1 / 4</span>
+      </div>
+
+      <!-- Inventory Crystals Slots -->
+      <div class="bg-slate-900/85 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-xl border-2 border-white/40 flex items-center gap-1.5">
+        <span class="text-xs font-bold text-amber-300 uppercase hidden md:inline">Crystals:</span>
+        <div class="flex gap-1.5 text-base">
+          <!-- Red Slot -->
+          <div id="slotRed" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-800 border-2 border-red-500/40 flex items-center justify-center text-slate-600 transition-all duration-300" title="Red Crystal">
+            <i class="fa-solid fa-gem"></i>
+          </div>
+          <!-- Blue Slot -->
+          <div id="slotBlue" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-800 border-2 border-blue-500/40 flex items-center justify-center text-slate-600 transition-all duration-300" title="Blue Crystal">
+            <i class="fa-solid fa-gem"></i>
+          </div>
+          <!-- Yellow Slot -->
+          <div id="slotYellow" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-800 border-2 border-amber-400/40 flex items-center justify-center text-slate-600 transition-all duration-300" title="Yellow Crystal">
+            <i class="fa-solid fa-gem"></i>
+          </div>
+          <!-- Rainbow Slot -->
+          <div id="slotRainbow" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-800 border-2 border-purple-400/40 flex items-center justify-center text-slate-600 transition-all duration-300" title="Rainbow Portal">
+            <i class="fa-solid fa-star"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HUD Right: Help & Checkpoint Buttons -->
+    <div class="flex gap-2 pointer-events-auto">
+      <button id="helpBtn" class="bg-sky-500 hover:bg-sky-600 active:scale-95 text-white w-9 h-9 sm:w-10 sm:h-10 rounded-2xl font-bold shadow-lg border-2 border-white flex items-center justify-center text-base sm:text-lg transition-transform cursor-pointer" title="How to Play">
+        <i class="fa-solid fa-circle-question"></i>
+      </button>
+      <button id="resetPosBtn" class="bg-amber-500 hover:bg-amber-600 active:scale-95 text-white px-3 h-9 sm:h-10 rounded-2xl font-bold shadow-lg border-2 border-white flex items-center gap-1 text-xs transition-transform cursor-pointer" title="Return to Safety Checkpoint">
+        <i class="fa-solid fa-rotate-left"></i>
+        <span class="hidden sm:inline">Checkpoint</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Dynamic Quest Objective Banner -->
+  <div class="absolute top-28 sm:top-20 left-1/2 -translate-x-1/2 pointer-events-none z-10 w-[92%] max-w-md">
+    <div id="objectiveBanner" class="bg-amber-400 text-amber-950 px-4 py-2 rounded-2xl shadow-xl border-2 border-white text-center flex items-center justify-center gap-2 font-bold text-xs sm:text-sm transition-all duration-500">
+      <i class="fa-solid fa-compass text-amber-800 text-base"></i>
+      <span id="objectiveText">STAGE 1: Find and touch the RED Crystal!</span>
+    </div>
+  </div>
+
+  <!-- Floating Interaction Prompt Cue -->
+  <div id="interactPrompt" class="hidden absolute bottom-28 left-1/2 -translate-x-1/2 bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold px-5 py-2.5 rounded-full border-4 border-yellow-300 shadow-2xl text-xs sm:text-base flex items-center gap-2.5 animate-bounce z-20">
+    <span class="bg-yellow-300 text-purple-900 px-2 py-0.5 rounded-lg text-[10px] sm:text-xs font-extrabold uppercase shadow">E / Tap</span>
+    <span id="interactPromptText">Interact with Object!</span>
+  </div>
+
+  <!-- Mobile Controls Overlay -->
+  <div id="mobileControls" class="absolute inset-0 pointer-events-none z-10 flex justify-between items-end p-4">
+    <!-- Left Virtual Joystick -->
+    <div id="joystickBase" class="joystick-container pointer-events-auto">
+      <div id="joystickKnob" class="joystick-knob"></div>
+    </div>
+
+    <!-- Right Floating Action Buttons -->
+    <div class="flex flex-col gap-2 items-end mb-2 mr-1">
+      <!-- Mobile Touch Camera Switcher -->
+      <button id="touchCameraBtn" class="pointer-events-auto w-12 h-12 bg-indigo-600 active:scale-90 text-white rounded-full border-2 border-white shadow-xl flex items-center justify-center font-bold text-lg transition-transform">
+        <i class="fa-solid fa-camera"></i>
+      </button>
+      <!-- Mobile Touch Interact Button -->
+      <button id="touchInteractBtn" class="pointer-events-auto w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-tr from-purple-600 to-pink-500 active:scale-90 text-white rounded-full border-4 border-white shadow-2xl flex flex-col items-center justify-center font-bold text-xs transition-transform">
+        <i class="fa-solid fa-hand text-xl sm:text-2xl mb-0.5"></i>
+        <span>INTERACT</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal 1: How to Play Instructions -->
+  <div id="helpModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-30 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border-4 border-sky-400 relative animate-in fade-in zoom-in duration-200">
+      <button id="closeHelpBtn" class="absolute top-4 right-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full w-8 h-8 flex items-center justify-center font-bold transition">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div class="text-center mb-4">
+        <div class="w-14 h-14 bg-sky-100 text-sky-600 rounded-2xl flex items-center justify-center mx-auto text-2xl mb-2">
+          <i class="fa-solid fa-gamepad"></i>
+        </div>
+        <h2 class="text-xl font-bold text-slate-800">How to Play</h2>
+        <p class="text-xs text-slate-500">Explore 4 color zones & solve the quests!</p>
+      </div>
+
+      <div class="space-y-2.5 text-xs sm:text-sm text-slate-700">
+        <div class="bg-sky-50 p-3 rounded-xl border border-sky-200 flex items-center gap-3">
+          <div class="bg-sky-500 text-white w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm shrink-0">
+            <i class="fa-solid fa-keyboard"></i>
+          </div>
+          <div>
+            <span class="font-bold text-sky-900">Desktop:</span> Move with <strong class="text-sky-700">WASD / Arrows</strong>. Press <strong class="text-sky-700">E</strong> to interact & <strong class="text-sky-700">C</strong> to switch camera.
+          </div>
+        </div>
+
+        <div class="bg-pink-50 p-3 rounded-xl border border-pink-200 flex items-center gap-3">
+          <div class="bg-pink-500 text-white w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm shrink-0">
+            <i class="fa-solid fa-mobile-screen"></i>
+          </div>
+          <div>
+            <span class="font-bold text-pink-900">Mobile:</span> Use <strong class="text-pink-700">Left Joystick</strong>, tap <strong class="text-pink-700">INTERACT</strong> or tap <strong class="text-pink-700">📷 Camera</strong> button.
+          </div>
+        </div>
+
+        <div class="bg-indigo-50 p-3 rounded-xl border border-indigo-200 flex items-center gap-3">
+          <div class="bg-indigo-500 text-white w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm shrink-0">
+            <i class="fa-solid fa-camera"></i>
+          </div>
+          <div>
+            <span class="font-bold text-indigo-900">3 Camera Views:</span> <strong class="text-indigo-700">3rd Person</strong>, <strong class="text-indigo-700">1st Person</strong>, and <strong class="text-indigo-700">Top-Down</strong> view.
+          </div>
+        </div>
+      </div>
+
+      <button id="gotItBtn" class="mt-5 w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 rounded-2xl shadow-lg transition active:scale-98">
+        Got It! Start Quest
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal 2: Dynamic Stage Quiz Modal -->
+  <div id="quizModal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-30 flex items-center justify-center p-4">
+    <div id="quizContainer" class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border-4 border-purple-400 text-center relative transition-transform">
+      
+      <!-- Quiz Header Icon -->
+      <div id="quizHeaderIcon" class="w-14 h-14 bg-gradient-to-tr from-purple-500 to-pink-500 text-white rounded-2xl flex items-center justify-center mx-auto text-2xl mb-2 shadow-lg border-2 border-yellow-300">
+        <i class="fa-solid fa-question"></i>
+      </div>
+
+      <!-- Question Title -->
+      <span id="quizBadge" class="bg-purple-100 text-purple-700 px-3 py-0.5 rounded-full text-xs font-extrabold uppercase tracking-wide">STAGE 1 QUIZ</span>
+      <h2 id="quizQuestion" class="text-lg sm:text-xl font-extrabold text-slate-800 mt-2 mb-1">Question goes here?</h2>
+      <p id="quizSubtext" class="text-xs text-slate-500 mb-3">Choose the correct answer below:</p>
+
+      <!-- Options Container -->
+      <div id="quizOptions" class="grid grid-cols-1 gap-2.5 mb-3">
+        <!-- Options injected dynamically via JS -->
+      </div>
+
+      <!-- Feedback Area -->
+      <div id="quizFeedback" class="hidden p-3 rounded-2xl text-xs sm:text-sm font-bold leading-relaxed mb-3"></div>
+
+      <!-- Close Modal Button -->
+      <button id="closeQuizBtn" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 rounded-2xl text-xs sm:text-sm transition">
+        Close & Try Again
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal 3: Victory Summary Modal -->
+  <div id="victoryModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md z-40 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border-4 border-amber-400 text-center relative animate-in fade-in zoom-in duration-300">
+      
+      <div class="w-20 h-20 bg-gradient-to-tr from-amber-400 to-yellow-300 text-amber-950 rounded-3xl flex items-center justify-center mx-auto text-4xl mb-3 shadow-2xl border-4 border-white rainbow-glow">
+        <i class="fa-solid fa-trophy"></i>
+      </div>
+
+      <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-800">VICTORY!</h2>
+      <p class="text-xs sm:text-sm text-purple-600 font-bold mb-4">You saved the Rainbow World!</p>
+
+      <!-- Star Rating Display -->
+      <div class="bg-amber-50 rounded-2xl p-4 border-2 border-amber-200 mb-5">
+        <div class="text-xs font-bold text-amber-800 uppercase tracking-wider mb-1">Your Performance:</div>
+        <div id="starContainer" class="flex justify-center gap-2 text-3xl sm:text-4xl text-amber-400 my-2">
+          <!-- Stars injected via JS -->
+        </div>
+        <div id="victoryRatingText" class="text-sm font-extrabold text-amber-900">Rainbow Legend!</div>
+        <div id="accuracyStatsText" class="text-xs text-slate-500 mt-1">4/4 First-try correct answers!</div>
+      </div>
+
+      <button id="restartGameBtn" class="w-full bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-700 hover:to-pink-600 text-white font-extrabold py-3 rounded-2xl shadow-xl border-2 border-yellow-300 transition active:scale-98 text-sm sm:text-base">
+        <i class="fa-solid fa-rotate-right mr-2"></i> Play Again
+      </button>
+    </div>
+  </div>
+
+  <!-- MAIN THREE.JS & GAME LOGIC SCRIPT -->
+  <script>
+    /* =========================================================================
+       1. GAME CONFIGURATION & WIDE ACCESSIBLE MAZE LAYOUT
+       ========================================================================= */
+    const MAZE_CELL_SIZE = 3;
+    
+    // Grid Legend:
+    // 0 = Path, 1 = Wall
+    // 2 = Spawn Start
+    // 3 = Stage 1 Red Crystal,     4 = Stage 1 Red Gate
+    // 5 = Stage 2 Blue Crystal,    6 = Stage 2 Blue Gate
+    // 7 = Stage 3 Yellow Crystal,  8 = Stage 3 Yellow Gate
+    // 9 = Stage 4 Rainbow Portal Citadel
+    const MAZE_GRID = [
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 2, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 5, 0, 1], // Row 1: Start at (1,1), Blue Crystal at (1,12)
+      [1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1], // Row 2
+      [1, 3, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1], // Row 3: Red Crystal at (3,1)
+      [1, 1, 1, 1, 1, 4, 1, 1, 1, 0, 1, 0, 1, 1, 1], // Row 4: Red Gate at (4,5)
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // Row 5: Open Corridor Zone 2
+      [1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 6, 1, 0, 1], // Row 6: Blue Gate at (6,11)
+      [1, 0, 1, 9, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // Row 7: Rainbow Citadel Portal at (7,3)
+      [1, 0, 1, 8, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1], // Row 8: Yellow Gate at (8,3)
+      [1, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 1], // Row 9: Yellow Crystal at (9,7) - Open wide space!
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]  // Row 10
+    ];
+
+    /* =========================================================================
+       2. QUIZ DATASET (CEFR PRE-A1 ENGLISH YEAR 2 COLOURS)
+       ========================================================================= */
+    const STAGE_QUIZZES = {
+      1: {
+        badge: "STAGE 1: Primary Colours",
+        question: "Touch the RED object!",
+        subtext: "Choose the correct picture below:",
+        options: [
+          { text: "Red Apple", emoji: "🍎", sub: '"A shiny red fruit!"', isCorrect: true },
+          { text: "Yellow Banana", emoji: "🍌", sub: '"A sweet yellow fruit!"', isCorrect: false },
+          { text: "Green Leaf", emoji: "🍃", sub: '"A fresh green leaf!"', isCorrect: false }
+        ],
+        successMsg: "🎉 Awesome! Red is for apples! Red Crystal collected!"
+      },
+      2: {
+        badge: "STAGE 2: Colour Matching",
+        question: "Select the phrase for the GREEN animal!",
+        subtext: "Look at the frog 🐸 and pick the right phrase:",
+        options: [
+          { text: "A green frog", emoji: "🐸", sub: '"Green like grass!"', isCorrect: true },
+          { text: "A blue bird", emoji: "🐦", sub: '"Blue like the sky!"', isCorrect: false },
+          { text: "A red cat", emoji: "🐱", sub: '"Red like an apple!"', isCorrect: false }
+        ],
+        successMsg: "🎉 Great reading! The frog is green! Blue Crystal collected!"
+      },
+      3: {
+        badge: "STAGE 3: Colour Mixing",
+        question: "Colour Mixing! RED + YELLOW = ?",
+        subtext: "What color do you get when you mix them?",
+        options: [
+          { text: "ORANGE", emoji: "🟧", sub: '"Red + Yellow = Orange!"', isCorrect: true },
+          { text: "PURPLE", emoji: "🟣", sub: '"Red + Blue = Purple!"', isCorrect: false },
+          { text: "GREEN", emoji: "🟩", sub: '"Blue + Yellow = Green!"', isCorrect: false }
+        ],
+        successMsg: "🎉 Magical! Red and Yellow make Orange! Yellow Crystal collected!"
+      },
+      4: {
+        badge: "STAGE 4: Rainbow Citadel Final",
+        question: "Complete: 'The sky is _____ on a clear day.'",
+        subtext: "Fill in the blank with the correct color word:",
+        options: [
+          { text: "BLUE", emoji: "🟦", sub: '"The sky is blue!"', isCorrect: true },
+          { text: "YELLOW", emoji: "🟨", sub: '"The sun is yellow!"', isCorrect: false },
+          { text: "RED", emoji: "🟥", sub: '"Apples are red!"', isCorrect: false }
+        ],
+        successMsg: "🏆 Outstanding! The sky is Blue! Rainbow Portal activated!"
+      }
+    };
+
+    /* =========================================================================
+       3. GLOBAL GAME STATE & WEB AUDIO API
+       ========================================================================= */
+    let scene, camera, renderer, clock;
+    let playerGroup;
+    let wallBoundingBoxes = [];
+
+    // Stage Objects References
+    const stageObjects = {
+      1: { crystalGroup: null, gateGroup: null, bBoxIndex: -1, collected: false, pos: new THREE.Vector3() },
+      2: { crystalGroup: null, gateGroup: null, bBoxIndex: -1, collected: false, pos: new THREE.Vector3() },
+      3: { crystalGroup: null, gateGroup: null, bBoxIndex: -1, collected: false, pos: new THREE.Vector3() },
+      4: { portalGroup: null, activated: false, pos: new THREE.Vector3() }
+    };
+
+    let currentStage = 1;
+    let lastCheckpointPos = new THREE.Vector3();
+    let playerStartPos = new THREE.Vector3();
+
+    // Stats tracking for star rating
+    let totalAttempts = 0;
+    let stageAttempts = { 1: 0, 2: 0, 3: 0, 4: 0 };
+
+    // Camera Modes: Index 0 = 3rd Person, Index 1 = 1st Person, Index 2 = Top-Down
+    const CAMERA_MODES = ['3rd Person', '1st Person', 'Top-Down'];
+    let currentCameraModeIndex = 0;
+
+    // Movement & Camera Angles
+    const PLAYER_SPEED = 5.2;
+    const PLAYER_RADIUS = 0.4;
+    let cameraYaw = 0;
+    let cameraPitch = 0.35;
+    const CAMERA_DISTANCE = 6.0;
+
+    // Controls State
+    const keysPressed = {};
+    let joystickVector = { x: 0, y: 0 };
+    let isMouseDown = false;
+    let previousMousePosition = { x: 0, y: 0 };
+    let activeTouchIdCamera = null;
+    let previousTouchPositionCamera = { x: 0, y: 0 };
+
+    // Particle Systems Array
+    let particleSystems = [];
+
+    /* Web Audio API Synthesizer Sound Effects */
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playTone(freq, type = 'sine', duration = 0.15) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + duration);
+    }
+
+    function playSuccessChime() {
+      const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+      notes.forEach((note, i) => setTimeout(() => playTone(note, 'triangle', 0.2), i * 90));
+    }
+
+    function playErrorBuzz() {
+      playTone(180, 'sawtooth', 0.2);
+      setTimeout(() => playTone(140, 'sawtooth', 0.25), 150);
+    }
+
+    function playGateUnlockSound() {
+      playTone(220, 'sine', 0.25);
+      setTimeout(() => playTone(330, 'sine', 0.25), 120);
+      setTimeout(() => playTone(440, 'triangle', 0.35), 240);
+    }
+
+    function playVictoryFanfare() {
+      const melody = [523.25, 659.25, 783.99, 1046.50, 880.00, 1046.50];
+      melody.forEach((note, i) => setTimeout(() => playTone(note, 'triangle', 0.35), i * 140));
+    }
+
+    /* =========================================================================
+       4. INITIALIZATION & THREE.JS SCENE SETUP
+       ========================================================================= */
+    window.addEventListener('load', () => {
+      initScene();
+      buildEnvironment();
+      buildMaze();
+      buildPlayer();
+      setupInputListeners();
+      setupUIHandlers();
+
+      clock = new THREE.Clock();
+      animate();
+    });
+
+    function initScene() {
+      const container = document.getElementById('gameCanvas');
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x87CEEB);
+      scene.fog = new THREE.FogExp2(0x87CEEB, 0.022);
+
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+
+      renderer = new THREE.WebGLRenderer({ canvas: container, antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+      scene.add(ambientLight);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+      dirLight.position.set(25, 35, 20);
+      dirLight.castShadow = true;
+      dirLight.shadow.mapSize.width = 1024;
+      dirLight.shadow.mapSize.height = 1024;
+      const d = 30;
+      dirLight.shadow.camera.left = -d;
+      dirLight.shadow.camera.right = d;
+      dirLight.shadow.camera.top = d;
+      dirLight.shadow.camera.bottom = -d;
+      scene.add(dirLight);
+    }
+
+    function buildEnvironment() {
+      const groundGeo = new THREE.PlaneGeometry(100, 100);
+      const groundMat = new THREE.MeshStandardMaterial({ color: 0x5cdb5c, roughness: 0.8 });
+      const ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      scene.add(ground);
+    }
+
+    /* =========================================================================
+       5. MAZE & OBJECT BUILDERS WITH ACCESSIBLE PATHWAYS
+       ========================================================================= */
+    function buildMaze() {
+      const rows = MAZE_GRID.length;
+      const cols = MAZE_GRID[0].length;
+      const offsetX = -(cols * MAZE_CELL_SIZE) / 2 + MAZE_CELL_SIZE / 2;
+      const offsetZ = -(rows * MAZE_CELL_SIZE) / 2 + MAZE_CELL_SIZE / 2;
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const type = MAZE_GRID[r][c];
+          const x = offsetX + c * MAZE_CELL_SIZE;
+          const z = offsetZ + r * MAZE_CELL_SIZE;
+
+          if (type === 1) {
+            // Distinct Wall Colors according to zone layout
+            let wallColor = 0xFF3B30; // Red zone
+            if (c > 8 && r < 5) wallColor = 0x007AFF; // Blue zone
+            else if (r > 6 && c > 5) wallColor = 0xFFCC00; // Yellow zone
+            else if (r > 5 && c < 5) wallColor = 0xAF52DE; // Rainbow Citadel
+
+            const wallGeo = new THREE.BoxGeometry(MAZE_CELL_SIZE, 2.8, MAZE_CELL_SIZE);
+            const wallMat = new THREE.MeshStandardMaterial({ color: wallColor, roughness: 0.4 });
+            const wall = new THREE.Mesh(wallGeo, wallMat);
+            wall.position.set(x, 1.4, z);
+            wall.castShadow = wall.receiveShadow = true;
+            scene.add(wall);
+
+            wallBoundingBoxes.push(new THREE.Box3().setFromObject(wall));
+
+          } else if (type === 2) {
+            playerStartPos.set(x, 0, z);
+            lastCheckpointPos.copy(playerStartPos);
+
+          } else if (type === 3) {
+            stageObjects[1].pos.set(x, 0, z);
+            buildCrystalPedestal(1, x, z, 0xFF0055);
+
+          } else if (type === 4) {
+            buildGate(1, x, z, 0xFF3B30);
+
+          } else if (type === 5) {
+            stageObjects[2].pos.set(x, 0, z);
+            buildCrystalPedestal(2, x, z, 0x007AFF);
+
+          } else if (type === 6) {
+            buildGate(2, x, z, 0x007AFF);
+
+          } else if (type === 7) {
+            stageObjects[3].pos.set(x, 0, z);
+            buildCrystalPedestal(3, x, z, 0xFFCC00);
+            buildYellowGuidePath(x, z); // Yellow path floor tiles
+
+          } else if (type === 8) {
+            buildGate(3, x, z, 0xFFCC00);
+
+          } else if (type === 9) {
+            stageObjects[4].pos.set(x, 0, z);
+            buildRainbowPortal(x, z);
+          }
+        }
+      }
+    }
+
+    function buildYellowGuidePath(targetX, targetZ) {
+      // Create guided yellow path tiles leading up to Yellow Crystal
+      const tileGeo = new THREE.PlaneGeometry(1.8, 1.8);
+      const tileMat = new THREE.MeshStandardMaterial({ color: 0xFFE066, roughness: 0.3 });
+      
+      for (let offset = -6; offset <= 0; offset += 2) {
+        const tile = new THREE.Mesh(tileGeo, tileMat);
+        tile.rotation.x = -Math.PI / 2;
+        tile.position.set(targetX + offset, 0.02, targetZ);
+        tile.receiveShadow = true;
+        scene.add(tile);
+      }
+    }
+
+    function buildCrystalPedestal(stageNum, x, z, hexColor) {
+      const group = new THREE.Group();
+      group.position.set(x, 0, z);
+
+      // Base Pedestal
+      const baseGeo = new THREE.CylinderGeometry(0.8, 1.0, 0.6, 8);
+      const baseMat = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.8 });
+      const base = new THREE.Mesh(baseGeo, baseMat);
+      base.position.y = 0.3;
+      base.castShadow = true;
+      group.add(base);
+
+      // Rotating Crystal Mesh
+      const crystalGeo = new THREE.OctahedronGeometry(0.55, 0);
+      const crystalMat = new THREE.MeshStandardMaterial({
+        color: hexColor,
+        emissive: hexColor,
+        emissiveIntensity: 0.8,
+        roughness: 0.1
+      });
+      const crystalMesh = new THREE.Mesh(crystalGeo, crystalMat);
+      crystalMesh.position.y = 1.35;
+      crystalMesh.name = "crystalMesh";
+      crystalMesh.castShadow = true;
+      group.add(crystalMesh);
+
+      // Point Light
+      const pLight = new THREE.PointLight(hexColor, 2, 6);
+      pLight.position.set(0, 1.35, 0);
+      pLight.name = "pLight";
+      group.add(pLight);
+
+      scene.add(group);
+      stageObjects[stageNum].crystalGroup = group;
+    }
+
+    function buildGate(stageNum, x, z, hexColor) {
+      const group = new THREE.Group();
+      group.position.set(x, 0, z);
+
+      // Gate Pillars
+      const pillarGeo = new THREE.BoxGeometry(0.4, 3.2, 0.4);
+      const pillarMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5 });
+      const p1 = new THREE.Mesh(pillarGeo, pillarMat);
+      p1.position.set(-MAZE_CELL_SIZE / 2 + 0.2, 1.6, 0);
+      const p2 = new THREE.Mesh(pillarGeo, pillarMat);
+      p2.position.set(MAZE_CELL_SIZE / 2 - 0.2, 1.6, 0);
+      group.add(p1, p2);
+
+      // Door Leaves
+      const doorGeo = new THREE.BoxGeometry(1.2, 2.4, 0.15);
+      const doorMat = new THREE.MeshStandardMaterial({ color: hexColor, roughness: 0.3 });
+
+      const leftDoor = new THREE.Mesh(doorGeo, doorMat);
+      leftDoor.position.set(-0.6, 1.4, 0);
+      leftDoor.name = "leftDoor";
+
+      const rightDoor = new THREE.Mesh(doorGeo, doorMat);
+      rightDoor.position.set(0.6, 1.4, 0);
+      rightDoor.name = "rightDoor";
+
+      group.add(leftDoor, rightDoor);
+
+      // Lock Badge
+      const lockGeo = new THREE.BoxGeometry(0.5, 0.5, 0.2);
+      const lockMat = new THREE.MeshStandardMaterial({ color: 0xFFCC00, roughness: 0.2, metalness: 0.5 });
+      const lockBadge = new THREE.Mesh(lockGeo, lockMat);
+      lockBadge.position.set(0, 1.4, 0.1);
+      lockBadge.name = "lockBadge";
+      group.add(lockBadge);
+
+      scene.add(group);
+      stageObjects[stageNum].gateGroup = group;
+
+      // Add Bounding Box
+      const gateBBox = new THREE.Box3(
+        new THREE.Vector3(x - MAZE_CELL_SIZE / 2, 0, z - 0.5),
+        new THREE.Vector3(x + MAZE_CELL_SIZE / 2, 3, z + 0.5)
+      );
+      wallBoundingBoxes.push(gateBBox);
+      stageObjects[stageNum].bBoxIndex = wallBoundingBoxes.length - 1;
+    }
+
+    function buildRainbowPortal(x, z) {
+      const group = new THREE.Group();
+      group.position.set(x, 0, z);
+
+      // Altar Base
+      const baseGeo = new THREE.CylinderGeometry(1.4, 1.8, 0.8, 12);
+      const baseMat = new THREE.MeshStandardMaterial({ color: 0xFFD700, roughness: 0.3, metalness: 0.4 });
+      const base = new THREE.Mesh(baseGeo, baseMat);
+      base.position.y = 0.4;
+      base.castShadow = true;
+      group.add(base);
+
+      // Portal Ring
+      const ringGeo = new THREE.TorusGeometry(1.2, 0.18, 16, 32);
+      const ringMat = new THREE.MeshStandardMaterial({ color: 0xAF52DE, emissive: 0x7B1FA2, roughness: 0.2 });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.position.y = 2.2;
+      ring.name = "portalRing";
+      group.add(ring);
+
+      // Star Core
+      const starGeo = new THREE.OctahedronGeometry(0.7, 0);
+      const starMat = new THREE.MeshStandardMaterial({
+        color: 0xFFFFFF,
+        emissive: 0xFFCC00,
+        emissiveIntensity: 0.9,
+        roughness: 0.1
+      });
+      const star = new THREE.Mesh(starGeo, starMat);
+      star.position.y = 2.2;
+      star.name = "portalStar";
+      group.add(star);
+
+      const pLight = new THREE.PointLight(0xFF00FF, 3, 8);
+      pLight.position.set(0, 2.2, 0);
+      pLight.name = "portalLight";
+      group.add(pLight);
+
+      scene.add(group);
+      stageObjects[4].portalGroup = group;
+    }
+
+    /* =========================================================================
+       6. PLAYER AVATAR BUILDER
+       ========================================================================= */
+    function buildPlayer() {
+      playerGroup = new THREE.Group();
+
+      // Body
+      const bodyGeo = new THREE.BoxGeometry(0.7, 0.8, 0.45);
+      const bodyMat = new THREE.MeshStandardMaterial({ color: 0x007AFF, roughness: 0.4 });
+      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      body.position.y = 0.8;
+      body.castShadow = true;
+      playerGroup.add(body);
+
+      // Head
+      const headGeo = new THREE.BoxGeometry(0.55, 0.55, 0.55);
+      const headMat = new THREE.MeshStandardMaterial({ color: 0xFFD3B6, roughness: 0.5 });
+      const head = new THREE.Mesh(headGeo, headMat);
+      head.position.y = 1.45;
+      head.castShadow = true;
+      playerGroup.add(head);
+
+      // Cap
+      const capGeo = new THREE.BoxGeometry(0.6, 0.15, 0.6);
+      const capMat = new THREE.MeshStandardMaterial({ color: 0xFFCC00, roughness: 0.3 });
+      const cap = new THREE.Mesh(capGeo, capMat);
+      cap.position.y = 1.75;
+      cap.castShadow = true;
+      playerGroup.add(cap);
+
+      const visorGeo = new THREE.BoxGeometry(0.5, 0.05, 0.25);
+      const visor = new THREE.Mesh(visorGeo, capMat);
+      visor.position.set(0, 1.72, 0.35);
+      playerGroup.add(visor);
+
+      // Eyes
+      const eyeGeo = new THREE.BoxGeometry(0.08, 0.12, 0.05);
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
+      const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+      leftEye.position.set(-0.15, 1.48, 0.28);
+      const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+      rightEye.position.set(0.15, 1.48, 0.28);
+      playerGroup.add(leftEye, rightEye);
+
+      // Backpack
+      const packGeo = new THREE.BoxGeometry(0.45, 0.55, 0.25);
+      const packMat = new THREE.MeshStandardMaterial({ color: 0xFF3B30, roughness: 0.4 });
+      const backpack = new THREE.Mesh(packGeo, packMat);
+      backpack.position.set(0, 0.8, -0.32);
+      backpack.castShadow = true;
+      playerGroup.add(backpack);
+
+      playerGroup.position.copy(playerStartPos);
+      scene.add(playerGroup);
+    }
+
+    /* =========================================================================
+       7. CONTROLS & CAMERA SWITCHER HANDLERS
+       ========================================================================= */
+    function setupInputListeners() {
+      window.addEventListener('keydown', (e) => {
+        keysPressed[e.code] = true;
+        if (e.code === 'KeyE') triggerInteraction();
+        if (e.code === 'KeyC') toggleCameraMode();
+      });
+
+      window.addEventListener('keyup', (e) => {
+        keysPressed[e.code] = false;
+      });
+
+      const canvas = document.getElementById('gameCanvas');
+      canvas.addEventListener('mousedown', (e) => {
+        isMouseDown = true;
+        previousMousePosition = { x: e.clientX, y: e.clientY };
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isMouseDown) return;
+        const deltaX = e.clientX - previousMousePosition.x;
+        const deltaY = e.clientY - previousMousePosition.y;
+
+        cameraYaw -= deltaX * 0.005;
+        cameraPitch += deltaY * 0.005;
+        cameraPitch = Math.max(0.1, Math.min(Math.PI / 2.2, cameraPitch));
+
+        previousMousePosition = { x: e.clientX, y: e.clientY };
+      });
+
+      window.addEventListener('mouseup', () => { isMouseDown = false; });
+
+      // Mobile Touch Joystick
+      const joystickBase = document.getElementById('joystickBase');
+      const joystickKnob = document.getElementById('joystickKnob');
+
+      joystickBase.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        updateJoystick(e.touches[0], joystickBase, joystickKnob);
+      }, { passive: false });
+
+      joystickBase.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        updateJoystick(e.touches[0], joystickBase, joystickKnob);
+      }, { passive: false });
+
+      const resetJoystick = () => {
+        joystickVector = { x: 0, y: 0 };
+        joystickKnob.style.transform = `translate(0px, 0px)`;
+      };
+
+      joystickBase.addEventListener('touchend', resetJoystick);
+      joystickBase.addEventListener('touchcancel', resetJoystick);
+
+      // Mobile Right Side Camera Orbit Drag
+      window.addEventListener('touchstart', (e) => {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const touch = e.changedTouches[i];
+          if (touch.clientX > window.innerWidth / 2 && activeTouchIdCamera === null) {
+            activeTouchIdCamera = touch.identifier;
+            previousTouchPositionCamera = { x: touch.clientX, y: touch.clientY };
+          }
+        }
+      });
+
+      window.addEventListener('touchmove', (e) => {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const touch = e.changedTouches[i];
+          if (touch.identifier === activeTouchIdCamera) {
+            const deltaX = touch.clientX - previousTouchPositionCamera.x;
+            const deltaY = touch.clientY - previousTouchPositionCamera.y;
+
+            cameraYaw -= deltaX * 0.006;
+            cameraPitch += deltaY * 0.006;
+            cameraPitch = Math.max(0.1, Math.min(Math.PI / 2.2, cameraPitch));
+
+            previousTouchPositionCamera = { x: touch.clientX, y: touch.clientY };
+          }
+        }
+      });
+
+      const clearCameraTouch = (e) => {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          if (e.changedTouches[i].identifier === activeTouchIdCamera) {
+            activeTouchIdCamera = null;
+          }
+        }
+      };
+
+      window.addEventListener('touchend', clearCameraTouch);
+      window.addEventListener('touchcancel', clearCameraTouch);
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function updateJoystick(touch, base, knob) {
+      const rect = base.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+
+      let dx = touch.clientX - centerX;
+      let dy = touch.clientY - centerY;
+      const maxRadius = rect.width / 2;
+      const distance = Math.hypot(dx, dy);
+
+      if (distance > maxRadius) {
+        dx = (dx / distance) * maxRadius;
+        dy = (dy / distance) * maxRadius;
+      }
+
+      knob.style.transform = `translate(${dx}px, ${dy}px)`;
+      joystickVector.x = dx / maxRadius;
+      joystickVector.y = dy / maxRadius;
+    }
+
+    function toggleCameraMode() {
+      currentCameraModeIndex = (currentCameraModeIndex + 1) % CAMERA_MODES.length;
+      document.getElementById('cameraModeText').innerText = CAMERA_MODES[currentCameraModeIndex];
+      playTone(600, 'sine', 0.1);
+    }
+
+    /* =========================================================================
+       8. UI HANDLERS & QUIZ LOGIC
+       ========================================================================= */
+    function setupUIHandlers() {
+      document.getElementById('cameraToggleBtn').addEventListener('click', toggleCameraMode);
+      document.getElementById('touchCameraBtn').addEventListener('click', toggleCameraMode);
+
+      document.getElementById('helpBtn').addEventListener('click', () => {
+        document.getElementById('helpModal').classList.remove('hidden');
+      });
+      document.getElementById('closeHelpBtn').addEventListener('click', () => {
+        document.getElementById('helpModal').classList.add('hidden');
+      });
+      document.getElementById('gotItBtn').addEventListener('click', () => {
+        document.getElementById('helpModal').classList.add('hidden');
+      });
+
+      document.getElementById('resetPosBtn').addEventListener('click', () => {
+        playerGroup.position.copy(lastCheckpointPos);
+        playTone(350, 'sine', 0.15);
+      });
+
+      document.getElementById('touchInteractBtn').addEventListener('click', triggerInteraction);
+
+      document.getElementById('closeQuizBtn').addEventListener('click', () => {
+        document.getElementById('quizModal').classList.add('hidden');
+      });
+
+      document.getElementById('restartGameBtn').addEventListener('click', () => {
+        location.reload();
+      });
+    }
+
+    function triggerInteraction() {
+      const targetObj = stageObjects[currentStage];
+      if (!targetObj || targetObj.collected || targetObj.activated) return;
+
+      const dist = playerGroup.position.distanceTo(targetObj.pos);
+      if (dist < 2.5) {
+        openQuizModal(currentStage);
+      }
+    }
+
+    function openQuizModal(stageNum) {
+      const quizData = STAGE_QUIZZES[stageNum];
+      if (!quizData) return;
+
+      document.getElementById('quizBadge').innerText = quizData.badge;
+      document.getElementById('quizQuestion').innerText = quizData.question;
+      document.getElementById('quizSubtext').innerText = quizData.subtext;
+
+      const optionsContainer = document.getElementById('quizOptions');
+      optionsContainer.innerHTML = '';
+
+      quizData.options.forEach((opt) => {
+        const btn = document.createElement('button');
+        btn.className = "quiz-card bg-slate-50 hover:bg-purple-50 border-2 border-slate-200 hover:border-purple-300 p-3 rounded-2xl flex items-center gap-3 text-left shadow-sm transition cursor-pointer";
+        btn.onclick = () => handleAnswer(stageNum, opt.isCorrect);
+
+        btn.innerHTML = `
+          <div class="w-11 h-11 bg-purple-100 text-purple-700 rounded-xl flex items-center justify-center text-2xl shadow-sm shrink-0 font-bold">
+            ${opt.emoji}
+          </div>
+          <div>
+            <div class="font-extrabold text-slate-800 text-sm sm:text-base">${opt.text}</div>
+            <div class="text-[11px] text-slate-500 font-semibold">${opt.sub}</div>
+          </div>
+        `;
+        optionsContainer.appendChild(btn);
+      });
+
+      document.getElementById('quizFeedback').classList.add('hidden');
+      document.getElementById('quizModal').classList.remove('hidden');
+    }
+
+    function handleAnswer(stageNum, isCorrect) {
+      const feedbackEl = document.getElementById('quizFeedback');
+      const containerEl = document.getElementById('quizContainer');
+
+      totalAttempts++;
+      stageAttempts[stageNum]++;
+
+      feedbackEl.classList.remove('hidden', 'bg-red-100', 'text-red-800', 'bg-emerald-100', 'text-emerald-900');
+
+      if (isCorrect) {
+        playSuccessChime();
+
+        feedbackEl.classList.add('bg-emerald-100', 'text-emerald-900', 'border', 'border-emerald-300');
+        feedbackEl.innerText = STAGE_QUIZZES[stageNum].successMsg;
+
+        if (stageNum < 4) {
+          stageObjects[stageNum].collected = true;
+          updateInventorySlot(stageNum);
+          unlockGate(stageNum);
+          createParticleBurst(stageObjects[stageNum].pos, getStageHexColor(stageNum));
+
+          // Save checkpoint
+          if (stageNum === 1) lastCheckpointPos.set(0, 0, 0); // Zone 2 start
+          else if (stageNum === 2) lastCheckpointPos.set(13.5, 0, 6); // Zone 3 start
+          else if (stageNum === 3) lastCheckpointPos.set(-4.5, 0, 6); // Zone 4 start
+
+          currentStage++;
+          updateHUD();
+
+          setTimeout(() => {
+            document.getElementById('quizModal').classList.add('hidden');
+          }, 1500);
+
+        } else {
+          // Stage 4 Final Victory
+          stageObjects[4].activated = true;
+          updateInventorySlot(4);
+          createFireworksSystem(stageObjects[4].pos);
+          playVictoryFanfare();
+
+          setTimeout(() => {
+            document.getElementById('quizModal').classList.add('hidden');
+            showVictoryModal();
+          }, 1500);
+        }
+
+      } else {
+        playErrorBuzz();
+        containerEl.classList.add('animate-shake');
+        setTimeout(() => containerEl.classList.remove('animate-shake'), 400);
+
+        feedbackEl.classList.add('bg-red-100', 'text-red-800', 'border', 'border-red-300');
+        feedbackEl.innerText = "Oops! Not quite right. Read carefully and try again!";
+      }
+    }
+
+    function getStageHexColor(num) {
+      if (num === 1) return 0xFF0055;
+      if (num === 2) return 0x007AFF;
+      if (num === 3) return 0xFFCC00;
+      return 0xAF52DE;
+    }
+
+    function updateInventorySlot(stageNum) {
+      const slotMap = { 1: 'slotRed', 2: 'slotBlue', 3: 'slotYellow', 4: 'slotRainbow' };
+      const slotClassMap = { 1: 'bg-red-500', 2: 'bg-blue-500', 3: 'bg-amber-400', 4: 'bg-purple-600' };
+
+      const slot = document.getElementById(slotMap[stageNum]);
+      if (slot) {
+        slot.classList.remove('bg-slate-800', 'text-slate-600');
+        slot.classList.add(slotClassMap[stageNum], 'text-white', 'scale-110', 'shadow-lg');
+      }
+
+      if (stageObjects[stageNum].crystalGroup) {
+        scene.remove(stageObjects[stageNum].crystalGroup);
+      }
+    }
+
+    function unlockGate(stageNum) {
+      const gateObj = stageObjects[stageNum];
+      if (!gateObj || !gateObj.gateGroup) return;
+
+      playGateUnlockSound();
+
+      const leftDoor = gateObj.gateGroup.getObjectByName('leftDoor');
+      const rightDoor = gateObj.gateGroup.getObjectByName('rightDoor');
+      const lockBadge = gateObj.gateGroup.getObjectByName('lockBadge');
+
+      let openProgress = 0;
+      const interval = setInterval(() => {
+        openProgress += 0.05;
+        if (leftDoor) leftDoor.rotation.y = -Math.PI / 2 * openProgress;
+        if (rightDoor) rightDoor.rotation.y = Math.PI / 2 * openProgress;
+        if (lockBadge) lockBadge.position.y += 0.05;
+
+        if (openProgress >= 1.0) {
+          clearInterval(interval);
+          if (lockBadge) gateObj.gateGroup.remove(lockBadge);
+
+          if (gateObj.bBoxIndex >= 0 && gateObj.bBoxIndex < wallBoundingBoxes.length) {
+            wallBoundingBoxes[gateObj.bBoxIndex].makeEmpty(); // Clear collision cleanly
+            gateObj.bBoxIndex = -1;
+          }
+        }
+      }, 30);
+    }
+
+    function updateHUD() {
+      document.getElementById('stageProgressText').innerText = `${currentStage} / 4`;
+
+      const objBannerText = document.getElementById('objectiveText');
+      const objectives = {
+        1: "STAGE 1: Find and touch the RED Crystal!",
+        2: "STAGE 2: Walk through Red Gate & find the BLUE Crystal!",
+        3: "STAGE 3: Walk through Blue Gate & find the YELLOW Crystal!",
+        4: "STAGE 4: Enter Rainbow Citadel & activate the Portal!"
+      };
+      objBannerText.innerText = objectives[currentStage] || "Explore the Maze!";
+    }
+
+    function showVictoryModal() {
+      const starContainer = document.getElementById('starContainer');
+      const victoryRatingText = document.getElementById('victoryRatingText');
+      const accuracyStatsText = document.getElementById('accuracyStatsText');
+
+      let firstTryCount = 0;
+      for (let s = 1; s <= 4; s++) {
+        if (stageAttempts[s] === 1) firstTryCount++;
+      }
+
+      let starsHtml = '';
+      let ratingTitle = '';
+
+      if (firstTryCount === 4) {
+        starsHtml = '<i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>';
+        ratingTitle = "🏆 Rainbow Legend! Perfect Score!";
+      } else if (firstTryCount >= 2) {
+        starsHtml = '<i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-regular fa-star"></i>';
+        ratingTitle = "⭐ Colour Master! Well Done!";
+      } else {
+        starsHtml = '<i class="fa-solid fa-star"></i><i class="fa-regular fa-star"></i><i class="fa-regular fa-star"></i>';
+        ratingTitle = "✨ Colour Explorer! Good Effort!";
+      }
+
+      starContainer.innerHTML = starsHtml;
+      victoryRatingText.innerText = ratingTitle;
+      accuracyStatsText.innerText = `${firstTryCount} / 4 first-try correct answers (${totalAttempts} total attempts).`;
+
+      document.getElementById('victoryModal').classList.remove('hidden');
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    /* =========================================================================
+       9. PARTICLE EFFECTS
+       ========================================================================= */
+    function createParticleBurst(pos, hexColor) {
+      const count = 35;
+      const geometry = new THREE.BufferGeometry();
+      const positions = new Float32Array(count * 3);
+      const velocities = [];
+
+      for (let i = 0; i < count; i++) {
+        positions[i * 3] = pos.x;
+        positions[i * 3 + 1] = pos.y + 1.2;
+        positions[i * 3 + 2] = pos.z;
+
+        velocities.push(new THREE.Vector3(
+          (Math.random() - 0.5) * 4,
+          Math.random() * 5 + 1,
+          (Math.random() - 0.5) * 4
+        ));
+      }
+
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const material = new THREE.PointsMaterial({
+        color: hexColor,
+        size: 0.25,
+        transparent: true,
+        opacity: 1.0
+      });
+
+      const pSystem = new THREE.Points(geometry, material);
+      scene.add(pSystem);
+
+      particleSystems.push({
+        system: pSystem,
+        velocities: velocities,
+        life: 1.2
+      });
+    }
+
+    function createFireworksSystem(pos) {
+      const colors = [0xFF0055, 0x007AFF, 0xFFCC00, 0xAF52DE, 0x00FF88];
+      colors.forEach((col, idx) => {
+        setTimeout(() => {
+          const fireworkPos = pos.clone().add(new THREE.Vector3(
+            (Math.random() - 0.5) * 6,
+            2,
+            (Math.random() - 0.5) * 6
+          ));
+          createParticleBurst(fireworkPos, col);
+        }, idx * 250);
+      });
+    }
+
+    function updateParticles(delta) {
+      for (let i = particleSystems.length - 1; i >= 0; i--) {
+        const ps = particleSystems[i];
+        ps.life -= delta;
+
+        if (ps.life <= 0) {
+          scene.remove(ps.system);
+          particleSystems.splice(i, 1);
+          continue;
+        }
+
+        const positions = ps.system.geometry.attributes.position.array;
+        for (let j = 0; j < ps.velocities.length; j++) {
+          positions[j * 3] += ps.velocities[j].x * delta;
+          positions[j * 3 + 1] += ps.velocities[j].y * delta;
+          positions[j * 3 + 2] += ps.velocities[j].z * delta;
+
+          ps.velocities[j].y -= 4.0 * delta;
+        }
+        ps.system.geometry.attributes.position.needsUpdate = true;
+        ps.system.material.opacity = ps.life / 1.2;
+      }
+    }
+
+    /* =========================================================================
+       10. PHYSICS & RENDER LOOP
+       ========================================================================= */
+    function checkWallCollision(testPos) {
+      const playerBox = new THREE.Box3(
+        new THREE.Vector3(testPos.x - PLAYER_RADIUS, 0.1, testPos.z - PLAYER_RADIUS),
+        new THREE.Vector3(testPos.x + PLAYER_RADIUS, 1.8, testPos.z + PLAYER_RADIUS)
+      );
+
+      for (let bbox of wallBoundingBoxes) {
+        if (!bbox.isEmpty() && playerBox.intersectsBox(bbox)) return true;
+      }
+      return false;
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const delta = Math.min(clock.getDelta(), 0.1);
+      const elapsedTime = clock.getElapsedTime();
+
+      // Motion Input Calculations
+      let moveX = 0, moveZ = 0;
+      if (keysPressed['KeyW'] || keysPressed['ArrowUp']) moveZ -= 1;
+      if (keysPressed['KeyS'] || keysPressed['ArrowDown']) moveZ += 1;
+      if (keysPressed['KeyA'] || keysPressed['ArrowLeft']) moveX -= 1;
+      if (keysPressed['KeyD'] || keysPressed['ArrowRight']) moveX += 1;
+
+      if (Math.abs(joystickVector.x) > 0.1) moveX = joystickVector.x;
+      if (Math.abs(joystickVector.y) > 0.1) moveZ = joystickVector.y;
+
+      const inputLen = Math.hypot(moveX, moveZ);
+      if (inputLen > 1) { moveX /= inputLen; moveZ /= inputLen; }
+
+      if (inputLen > 0.1) {
+        const moveAngle = Math.atan2(moveX, moveZ) + cameraYaw;
+        const dirX = Math.sin(moveAngle);
+        const dirZ = Math.cos(moveAngle);
+        const step = PLAYER_SPEED * delta;
+
+        // Collision Checks
+        const testX = playerGroup.position.clone(); testX.x += dirX * step;
+        if (!checkWallCollision(testX)) playerGroup.position.x = testX.x;
+
+        const testZ = playerGroup.position.clone(); testZ.z += dirZ * step;
+        if (!checkWallCollision(testZ)) playerGroup.position.z = testZ.z;
+
+        const targetRotation = Math.atan2(dirX, dirZ);
+        playerGroup.rotation.y = THREE.MathUtils.lerp(playerGroup.rotation.y, targetRotation, 0.2);
+
+        // Walking Bobbing
+        playerGroup.children[0].position.y = 0.8 + Math.abs(Math.sin(elapsedTime * 12)) * 0.08;
+      } else {
+        playerGroup.children[0].position.y = 0.8;
+      }
+
+      if (playerGroup.position.y < -5) playerGroup.position.copy(lastCheckpointPos);
+
+      // CAMERA POSITIONING SWITCHER LOGIC
+      if (currentCameraModeIndex === 0) {
+        // 3RD PERSON MODE
+        playerGroup.visible = true;
+        const camX = playerGroup.position.x + CAMERA_DISTANCE * Math.sin(cameraYaw) * Math.cos(cameraPitch);
+        const camY = playerGroup.position.y + 1.2 + CAMERA_DISTANCE * Math.sin(cameraPitch);
+        const camZ = playerGroup.position.z + CAMERA_DISTANCE * Math.cos(cameraYaw) * Math.cos(cameraPitch);
+
+        camera.position.lerp(new THREE.Vector3(camX, camY, camZ), 0.15);
+        camera.lookAt(playerGroup.position.x, playerGroup.position.y + 1.1, playerGroup.position.z);
+
+      } else if (currentCameraModeIndex === 1) {
+        // 1ST PERSON MODE (Hide player avatar to avoid blocking view)
+        playerGroup.visible = false;
+        const eyePos = playerGroup.position.clone().add(new THREE.Vector3(0, 1.45, 0));
+        camera.position.copy(eyePos);
+
+        const lookDirX = Math.sin(cameraYaw + Math.PI);
+        const lookDirY = -Math.sin(cameraPitch);
+        const lookDirZ = Math.cos(cameraYaw + Math.PI);
+        const targetLook = eyePos.clone().add(new THREE.Vector3(lookDirX, lookDirY, lookDirZ));
+
+        camera.lookAt(targetLook);
+
+      } else if (currentCameraModeIndex === 2) {
+        // TOP-DOWN BIRD'S EYE VIEW MODE
+        playerGroup.visible = true;
+        const topX = playerGroup.position.x;
+        const topY = playerGroup.position.y + 18.0;
+        const topZ = playerGroup.position.z + 0.1;
+
+        camera.position.lerp(new THREE.Vector3(topX, topY, topZ), 0.15);
+        camera.lookAt(playerGroup.position.x, playerGroup.position.y, playerGroup.position.z);
+      }
+
+      // Animate Crystals & Portal
+      for (let s = 1; s <= 3; s++) {
+        const obj = stageObjects[s];
+        if (obj && obj.crystalGroup && !obj.collected) {
+          const crystalMesh = obj.crystalGroup.getObjectByName('crystalMesh');
+          const pLight = obj.crystalGroup.getObjectByName('pLight');
+          if (crystalMesh) {
+            crystalMesh.rotation.y += delta * 1.6;
+            crystalMesh.position.y = 1.35 + Math.sin(elapsedTime * 3 + s) * 0.12;
+          }
+          if (pLight) pLight.intensity = 1.8 + Math.sin(elapsedTime * 4) * 0.6;
+        }
+      }
+
+      if (stageObjects[4].portalGroup) {
+        const pGroup = stageObjects[4].portalGroup;
+        const ring = pGroup.getObjectByName('portalRing');
+        const star = pGroup.getObjectByName('portalStar');
+        if (ring) ring.rotation.z += delta * 1.2;
+        if (star) {
+          star.rotation.y += delta * 2.0;
+          star.position.y = 2.2 + Math.sin(elapsedTime * 3) * 0.15;
+        }
+      }
+
+      // Update Particles
+      updateParticles(delta);
+
+      // Proximity Prompt Check
+      const targetObj = stageObjects[currentStage];
+      const interactPrompt = document.getElementById('interactPrompt');
+      const interactText = document.getElementById('interactPromptText');
+      const touchInteractBtn = document.getElementById('touchInteractBtn');
+
+      if (targetObj && playerGroup.position.distanceTo(targetObj.pos) < 2.5) {
+        interactPrompt.classList.remove('hidden');
+        touchInteractBtn.classList.add('animate-bounce', 'ring-4', 'ring-yellow-300');
+        if (currentStage < 4) interactText.innerText = "Interact with Crystal!";
+        else interactText.innerText = "Activate Rainbow Portal!";
+      } else {
+        interactPrompt.classList.add('hidden');
+        touchInteractBtn.classList.remove('animate-bounce', 'ring-4', 'ring-yellow-300');
+      }
+
+      renderer.render(scene, camera);
+    }
+  </script>
+</body>
+</html>
